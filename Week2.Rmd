@@ -1,0 +1,133 @@
+---
+title: 'Peer-graded Assignment: Milestone Report'
+author: "EPriske"
+date: "26 11 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Summary
+
+The goal of this project is just to display that you've gotten used to working with the data and that you are on track to create your prediction algorithm. We want to do an exploratory analysis of the data we are going to work with, we will use the USA data set given to us by "Corpora" (The corpora are collected from publicly available sources by a web crawler. The crawler checks for language, so as to mainly get texts consisting of the desired language*.)
+
+First we will start by loading the required libraries for our exploratory analysis.
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+library(lubridate)
+library(RColorBrewer)
+library(ngram)
+library(dplyr)
+library(RWeka)
+library(forcats)
+```
+
+Then we will add the files needed for analysis to our working directory. While using the Coursera Rstudio Sandbox, it is difficult to download documents directly using code, so what I did was to download the Zip and then upload only the files needed for this Capstone project. I created a folder called Capstone, and uploaded the US files there. Next step is to read the lines of every file and store them in variables.
+
+Because of RAM limitations on my RStudio Cloud (1 GB RAM) I put a limit in the lines readed by the function readLines, the limit was set at 50,000 lines.
+
+```{r}
+setwd("/cloud/project/Capstone")
+destfile = "./Coursera-SwiftKey.zip"
+if(!file.exists(destfile)){
+  url = "https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip"
+  file <- basename(url)
+  download.file(url, file, method="curl")
+  unzip(file)
+}
+
+twitter <- readLines("/cloud/project/Capstone/final/en_US/en_US.twitter.txt", n = 50000, encoding = 'UTF-8',warn = FALSE)
+news <- readLines("/cloud/project/Capstone/final/en_US/en_US.news.txt", n = 50000, encoding = 'UTF-8',warn = FALSE)
+blogs <- readLines("/cloud/project/Capstone/final/en_US/en_US.blogs.txt", n = 50000, encoding = 'UTF-8',warn = FALSE)
+```
+
+### Now we can start doing or exploratory analysis. 
+
+```{r}
+#Number of lines per document.
+SMatrix <- as.data.frame(cbind(rbind(length(news),length(twitter),length(blogs)),rbind(wordcount(news),wordcount(twitter),wordcount(blogs))))
+names(SMatrix)<-c("#lines","#words")
+rownames(SMatrix)<-c("news","twitter","blogs")
+SMatrix
+
+```
+## Training Set
+
+Now that we have our data, we want to divided into a Training Set and a Test Set. To be able to do this we will use the function "sample", we want to take 5% of the remaining of the datasets.
+
+```{r}
+set.seed(99999)
+
+TRblogs <- sample(blogs, length(blogs)*0.05)
+TRnews <- sample(news, length(news)*0.05)
+TRtwitter <- sample(twitter, length(twitter)*0.05)
+Training=c(TRblogs,TRnews,TRtwitter)
+
+length(Training)
+wordcount(Training)
+
+```
+
+After obtaining our Training set (7,500 lines with 222,689 words randomly selected from all of our datasets) we can start the tokenization for this we will use the library "ngram":
+
+"An n-gram is a sequence of n "words" taken from a body of text. This package offers utilities for creating, displaying, summarizing, and "babbling" n-grams. The tokenization and 'babbling' are handled by very efficient C code, which can even be build as its own standalone library. The babbler
+is a simple Markov chain."
+
+```{r}
+unigram <- NGramTokenizer(Training, Weka_control(min = 1,max=1))
+bigram <- NGramTokenizer(Training, Weka_control(min = 2,max= 2))
+trigram <-NGramTokenizer(Training, Weka_control(min = 3, max=3)) 
+unigram<-data.frame(table(unigram))%>%arrange(desc(Freq))
+bigram<-data.frame(table(bigram))%>%arrange(desc(Freq))
+trigram<-data.frame(table(trigram))%>%arrange(desc(Freq))
+
+Tokens <- as.data.frame(cbind(unigram[1:15,],bigram[1:15,],trigram[1:15,]))
+names(Tokens)[c(2,4,6)]<-c("FreqUn","FreqBi","FreqTri")
+Tokens
+```
+Using "ngram" we have a good overview of the most used words in our Training Dataset, we can see the most used word, the most used combination of 2 words and the most used combination of 3 words. 
+
+## Plotting our findings.
+
+Now we want to plot this using ggplot2.
+
+```{r}
+Tokens %>%
+  mutate(unigram = fct_reorder(unigram, FreqUn)) %>%
+  ggplot(mapping = aes(x = unigram, y = FreqUn)) + 
+  geom_bar(stat="identity", fill="#f68060", alpha=.6, width=.4) +
+  coord_flip() +
+  xlab("Unigram") +
+  ylab("Frequency") +
+  ggtitle("Top Unigrams") +
+  theme_classic()
+
+```
+```{r}
+Tokens %>%
+  mutate(bigram = fct_reorder(bigram, FreqBi)) %>%
+  ggplot(mapping = aes(x = bigram, y = FreqBi)) + 
+  geom_bar(stat="identity", fill="#f27066", alpha=.6, width=.4) +
+  coord_flip() +
+  xlab("Bigram") +
+  ylab("Frequency") +
+  ggtitle("Top Bigram") +
+  theme_classic()
+
+```
+```{r}
+Tokens %>%
+  mutate(trigram = fct_reorder(trigram, FreqTri)) %>%
+  ggplot(mapping = aes(x = trigram, y = FreqTri)) + 
+  geom_bar(stat="identity", fill="#f12345", alpha=.6, width=.4) +
+  coord_flip() +
+  xlab("Trigram") +
+  ylab("Frequency") +
+  ggtitle("Top Trigram") +
+  theme_classic()
+
+```
+
